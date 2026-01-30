@@ -1,0 +1,37 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis]
+}
+
+model Race {
+  id            Int      @id @default(autoincrement())
+  external_id   String   @unique
+  name          String
+  date          DateTime
+  city          String
+  
+  // Stockage spatial : Point géodésique (SRID 4326)
+  location      Unsupported("geography(Point, 4326)")
+
+  types         String[] // Ex: ['trail', 'marathon']
+  
+  min_km        Decimal  @db.Decimal(10, 2)
+  max_km        Decimal  @db.Decimal(10, 2)
+  
+  // Nouveaux champs Dénivelé (conformes specs)
+  min_dplus     Int?
+  max_dplus     Int?
+  
+  raw_distances Json     // Détail des parcours
+  url           String?
+  source        String?
+
+  // Index spatial GIST pour des recherches rapides "Autour de moi"
+  @@index([location], name: "location_idx", type: Gist)
+}
