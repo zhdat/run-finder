@@ -2,39 +2,40 @@
 
 import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { MapPin, Navigation, Filter, Ruler, Mountain, Search, Loader2 } from "lucide-react";
 import { Race } from "./types";
 
-// Import dynamique de la carte (Client Side Only)
+// Import dynamique de la Map
 const Map = dynamic(() => import("@/app/components/Map"), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full flex items-center justify-center bg-gray-100">
+    <div className="h-full w-full flex items-center justify-center bg-gray-50 text-gray-400">
       Chargement de la carte...
     </div>
   ),
 });
 
 export default function Home() {
-  // --- ÉTATS (State) ---
+  // --- STATE ---
   const [races, setRaces] = useState<Race[]>([]);
   const [loading, setLoading] = useState(false);
-
-  // Position (Défaut: Paris)
   const [userLat, setUserLat] = useState(48.8566);
   const [userLng, setUserLng] = useState(2.3522);
 
   // Filtres
-  const [radius, setRadius] = useState(50); // km
-  const [minDplus, setMinDplus] = useState(0); // mètres
+  const [radius, setRadius] = useState(50);
+  const [minDplus, setMinDplus] = useState(0);
   const [minKm, setMinKm] = useState(0);
   const [maxKm, setMaxKm] = useState(200);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+
+  // UI State
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
 
   // --- LOGIQUE API ---
   const fetchRaces = useCallback(async () => {
     setLoading(true);
     try {
-      // Construction de l'URL avec Query Params
       const params = new URLSearchParams({
         lat: userLat.toString(),
         lng: userLng.toString(),
@@ -43,46 +44,31 @@ export default function Home() {
         max_km: maxKm.toString(),
         min_dplus: minDplus.toString(),
       });
-
-      if (selectedTypes.length > 0) {
-        params.append("types", selectedTypes.join(","));
-      }
+      if (selectedTypes.length > 0) params.append("types", selectedTypes.join(","));
 
       const res = await fetch(`/api/races/search?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRaces(data);
-      }
+      if (res.ok) setRaces(await res.json());
     } catch (error) {
-      console.error("Erreur fetch:", error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
   }, [userLat, userLng, radius, minKm, maxKm, minDplus, selectedTypes]);
 
-  // Chargement initial + Reload quand les filtres changent
-  // (Note: Pour optimiser, on pourrait ajouter un bouton "Rechercher" au lieu de l'effet automatique)
   useEffect(() => {
-    // Petit debounce pour éviter de spammer l'API pendant qu'on glisse les sliders
-    const timer = setTimeout(() => {
-      fetchRaces();
-    }, 500);
+    const timer = setTimeout(() => fetchRaces(), 500);
     return () => clearTimeout(timer);
   }, [fetchRaces]);
 
-  // Fonction Geolocation "Autour de moi"
   const handleLocateMe = () => {
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition((pos) => {
         setUserLat(pos.coords.latitude);
         setUserLng(pos.coords.longitude);
       });
-    } else {
-      alert("Géolocalisation non supportée par ce navigateur.");
     }
   };
 
-  // Gestion des Checkboxes Types
   const toggleType = (type: string) => {
     setSelectedTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
@@ -90,113 +76,175 @@ export default function Home() {
   };
 
   return (
-    <main className="flex h-screen flex-col md:flex-row bg-gray-50">
-      {/* SIDEBAR FILTRES */}
-      <aside className="w-full md:w-80 bg-white shadow-xl z-20 overflow-y-auto p-5 flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-extrabold text-blue-600 mb-2">🏃‍♂️ Run-Finder</h1>
-          <p className="text-sm text-gray-500">Trouvez votre prochaine course.</p>
-        </div>
+    <main className="relative h-screen w-screen overflow-hidden font-sans text-slate-800">
+      {/* --- CARTE EN ARRIÈRE PLAN --- */}
+      <div className="absolute inset-0 z-0">
+        <Map races={races} center={[userLat, userLng]} />
+      </div>
 
-        {/* Bouton Géoloc */}
-        <button
-          onClick={handleLocateMe}
-          className="flex items-center justify-center gap-2 w-full bg-blue-100 text-blue-700 py-2 rounded hover:bg-blue-200 transition font-medium">
-          📍 Autour de moi
-        </button>
-
-        {/* Filtre: Rayon */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="font-semibold text-gray-700">Rayon</label>
-            <span className="text-blue-600 font-bold">{radius} km</span>
-          </div>
+      {/* --- HEADER FLOTTANT (Barre de recherche style iOS) --- */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-1000 w-[90%] max-w-md">
+        <div className="flex items-center gap-3 bg-white/80 backdrop-blur-xl border border-white/40 shadow-xl rounded-full p-2 px-4 transition-all hover:bg-white/90">
+          <Search className="w-5 h-5 text-gray-400" />
           <input
-            type="range"
-            min="5"
-            max="500"
-            step="5"
-            value={radius}
-            onChange={(e) => setRadius(Number(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            type="text"
+            placeholder="Rechercher une ville..."
+            className="bg-transparent border-none outline-none text-sm flex-1 placeholder:text-gray-400"
+            disabled // À implémenter plus tard avec API Adresse
           />
+          <div className="h-6 w-px bg-gray-300 mx-1"></div>
+          <button
+            onClick={handleLocateMe}
+            className="p-2 bg-blue-500/10 text-blue-600 rounded-full hover:bg-blue-500/20 transition">
+            <Navigation className="w-4 h-4" />
+          </button>
         </div>
+      </div>
 
-        {/* Filtre: Dénivelé (D+) */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="font-semibold text-gray-700">Dénivelé Min (D+)</label>
-            <span className="text-green-600 font-bold">{minDplus} m</span>
+      {/* --- PANNEAU DE CONTRÔLE (Glassmorphism) --- */}
+      <aside
+        className={`absolute top-24 left-4 bottom-4 z-1000 w-full max-w-sm transition-transform duration-300 ease-out ${isPanelOpen ? "translate-x-0" : "-translate-x-[110%]"}`}>
+        <div className="flex flex-col h-full bg-white/75 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl overflow-hidden">
+          {/* Header du Panneau */}
+          <div className="p-6 border-b border-gray-200/50 flex justify-between items-center bg-white/40">
+            <div>
+              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-linear-to-r from-blue-600 to-indigo-600">
+                Run-Finder
+              </h1>
+              <p className="text-xs text-gray-500 font-medium">
+                {loading ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Recherche...
+                  </span>
+                ) : (
+                  `${races.length} événements trouvés`
+                )}
+              </p>
+            </div>
+            <button
+              onClick={() => setIsPanelOpen(false)}
+              className="md:hidden p-2 bg-gray-100 rounded-full">
+              ✕
+            </button>
           </div>
-          <input
-            type="range"
-            min="0"
-            max="3000"
-            step="100"
-            value={minDplus}
-            onChange={(e) => setMinDplus(Number(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-          />
-        </div>
 
-        {/* Filtre: Distance */}
-        <div className="space-y-3">
-          <label className="font-semibold text-gray-700 block">Distance (km)</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={minKm}
-              onChange={(e) => setMinKm(Number(e.target.value))}
-              className="w-20 p-2 border rounded text-center text-black"
-              placeholder="Min"
-              min={0}
-            />
-            <span className="text-gray-400">-</span>
-            <input
-              type="number"
-              value={maxKm}
-              onChange={(e) => setMaxKm(Number(e.target.value))}
-              className="w-20 p-2 border rounded text-center text-black"
-              placeholder="Max"
-              min={0}
-            />
-          </div>
-        </div>
+          {/* Contenu Scrollable */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+            {/* Filtre Rayon */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <MapPin className="w-4 h-4 text-blue-500" /> Rayon
+                </label>
+                <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                  {radius} km
+                </span>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="200"
+                step="5"
+                value={radius}
+                onChange={(e) => setRadius(Number(e.target.value))}
+                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+            </div>
 
-        {/* Filtre: Types */}
-        <div className="space-y-2">
-          <label className="font-semibold text-gray-700 block">Type de terrain</label>
-          <div className="flex flex-wrap gap-2">
-            {["trail", "road", "marathon", "ultra"].map((type) => (
-              <label
-                key={type}
-                className="flex items-center gap-2 cursor-pointer px-3 py-1 rounded border text-black hover:bg-gray-100">
-                <input
-                  type="checkbox"
-                  checked={selectedTypes.includes(type)}
-                  onChange={() => toggleType(type)}
-                  className="rounded text-blue-600 focus:ring-blue-500"
-                />
-                <span className="capitalize">{type}</span>
+            {/* Filtre Dénivelé */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <Mountain className="w-4 h-4 text-emerald-500" /> Dénivelé Min
+                </label>
+                <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+                  {minDplus} m+
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="3000"
+                step="100"
+                value={minDplus}
+                onChange={(e) => setMinDplus(Number(e.target.value))}
+                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+              />
+            </div>
+
+            {/* Filtre Distance */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <Ruler className="w-4 h-4 text-purple-500" /> Distance (km)
               </label>
-            ))}
-          </div>
-        </div>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    value={minKm}
+                    onChange={(e) => setMinKm(Number(e.target.value))}
+                    className="w-full pl-3 pr-2 py-2 bg-white/50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <span className="absolute right-3 top-2 text-xs text-gray-400">min</span>
+                </div>
+                <div className="w-2 h-px bg-gray-400"></div>
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    value={maxKm}
+                    onChange={(e) => setMaxKm(Number(e.target.value))}
+                    className="w-full pl-3 pr-2 py-2 bg-white/50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <span className="absolute right-3 top-2 text-xs text-gray-400">max</span>
+                </div>
+              </div>
+            </div>
 
-        {/* Compteur de résultats */}
-        <div className="mt-auto pt-4 border-t">
-          {loading ? (
-            <p className="text-center text-gray-500 animate-pulse">Recherche...</p>
-          ) : (
-            <p className="text-center font-bold text-gray-800">{races.length} courses trouvées</p>
-          )}
+            {/* Filtre Types (Tags style Apple) */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <Filter className="w-4 h-4 text-orange-500" /> Type de terrain
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {["trail", "road", "marathon", "ultra"].map((type) => {
+                  const isActive = selectedTypes.includes(type);
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => toggleType(type)}
+                      className={`
+                        px-4 py-1.5 rounded-full text-xs font-semibold capitalize transition-all duration-200 border
+                        ${
+                          isActive
+                            ? "bg-slate-800 text-white border-slate-800 shadow-md transform scale-105"
+                            : "bg-white/50 text-gray-600 border-gray-200 hover:bg-white hover:border-gray-300"
+                        }
+                      `}>
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer du Panneau */}
+          <div className="p-4 bg-white/40 border-t border-gray-200/50">
+            <button className="w-full py-3 bg-linear-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all transform hover:scale-[1.02] active:scale-95 text-sm">
+              Voir la liste détaillée
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* ZONE CARTE */}
-      <div className="flex-1 relative z-10 h-[50vh] md:h-auto">
-        <Map races={races} center={[userLat, userLng]} />
-      </div>
+      {/* Bouton Toggle Sidebar (Mobile) */}
+      {!isPanelOpen && (
+        <button
+          onClick={() => setIsPanelOpen(true)}
+          className="absolute bottom-8 left-4 z-1000 p-3 bg-white text-slate-800 rounded-full shadow-xl hover:scale-110 transition">
+          <Filter className="w-6 h-6" />
+        </button>
+      )}
     </main>
   );
 }

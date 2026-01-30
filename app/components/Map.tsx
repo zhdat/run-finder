@@ -46,18 +46,45 @@ export default function Map({ races, center }: Readonly<MapProps>) {
             key={race.id}
             position={[race.location.coordinates[1], race.location.coordinates[0]]}
             icon={icon}>
-            <Popup>
-              <div className="text-sm">
-                <h3 className="font-bold">{race.name}</h3>
-                <p>📅 {new Date(race.date).toLocaleDateString()}</p>
-                <p>📍 {race.city}</p>
-                <p>🏔️ {race.max_dplus ? `${race.max_dplus}m D+` : "Plat"}</p>
-                <p>📏 {race.max_km} km</p>
+            <Popup className="glass-popup">
+              {" "}
+              {/* On pourra ajouter du CSS global pour customiser la classe leaflet */}
+              <div className="p-1 min-w-50">
+                <div className="flex items-center justify-between mb-2">
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase text-white ${
+                      race.types.includes("trail") ? "bg-emerald-500" : "bg-blue-500"
+                    }`}>
+                    {race.types[0] || "Course"}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {new Date(race.date).toLocaleDateString()}
+                  </span>
+                </div>
+
+                <h3 className="font-bold text-base text-slate-800 leading-tight mb-1">
+                  {race.name}
+                </h3>
+                <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">📍 {race.city}</p>
+
+                <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  <div className="text-center">
+                    <p className="text-gray-400">Distance</p>
+                    <p className="font-semibold text-slate-700">{race.max_km} km</p>
+                  </div>
+                  <div className="text-center border-l border-gray-200">
+                    <p className="text-gray-400">Dénivelé</p>
+                    <p className="font-semibold text-slate-700">
+                      {race.max_dplus ? `${race.max_dplus}m` : "-"}
+                    </p>
+                  </div>
+                </div>
+
                 <a
                   href={race.url || "#"}
                   target="_blank"
-                  className="text-blue-600 hover:underline block mt-1">
-                  Voir la course →
+                  className="mt-3 block w-full text-center py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-md hover:bg-slate-700 transition">
+                  Voir détails
                 </a>
               </div>
             </Popup>
